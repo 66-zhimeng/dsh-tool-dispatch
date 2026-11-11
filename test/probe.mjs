@@ -85,6 +85,19 @@ const batch = await here('../src/index.js');
 batch.apply(ctx, { telemetryPath: null });
 ok('run_tools registered');
 
+// The plugin also contributes one system-prompt section; confirm it assembles.
+if (ctx.systemPrompt && typeof ctx.systemPrompt.assemble === 'function') {
+  try {
+    const assembly = await ctx.systemPrompt.assemble({});
+    const blob = JSON.stringify(assembly);
+    log(`\nPROMPT SECTION: ${blob.includes('调度默认偏好') ? 'PRESENT' : 'MISSING'}`);
+  } catch (error) {
+    log(`\nPROMPT SECTION: assemble failed — ${error && error.message ? error.message : error}`);
+  }
+} else {
+  log('\nPROMPT SECTION: systemPrompt service unavailable in this probe');
+}
+
 log('\n-- dispatching run_tools through the real executor --');
 const started = Date.now();
 try {

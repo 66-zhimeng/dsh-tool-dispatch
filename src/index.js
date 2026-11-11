@@ -11,7 +11,27 @@ import { executeBatch, renderValue } from './run.js';
 import { executeParallel, renderParallelValue } from './parallel.js';
 
 export const name = 'dispatch';
-export const inject = ['tools'];
+export const inject = ['tools', 'systemPrompt'];
+
+/**
+ * One short scheduling rule in the system prompt. The point is a cheaper
+ * default: the model checks "are these independent?" once per batch instead of
+ * paying a round trip per action. Kept deliberately small — a long policy
+ * costs more thinking than the round trips it saves.
+ */
+const POLICY = [
+  '## 调度默认偏好',
+  '',
+  '发工具调用前扫一眼：这一批动作里有没有两个以上互不依赖的？有就合并成一次调用，没有就直接发。',
+  '- 多个独立动作（读多个文件、多条命令、抓多个网页、改完再验）→ 一次 `run_tools`；PTC 模式下在程序里写 `await tools.run_tools({steps:[...]})`。',
+  '- 多个独立的重任务（各自都要多轮工具或读很多文件，且只要结论）→ 一次 `run_parallel` 派发子 agent。',
+  '- 只有一步，或后一步必须看过前一步结果才能决定 → 直接调用，不要硬包。',
+  '',
+  '这是偏好不是义务：判定只看一眼有没有多个独立动作，不要为此展开推理。',
+].join('\n');
+
+const POLICY_ORDER = 55;
+
 
 const DESCRIPTION = [
   '在一次模型往返里执行多个工具调用，压掉多余的往返（每个往返约付 2s 首字 + 数秒思考）。',
@@ -109,6 +129,20 @@ export function apply(ctx, config = {}) {
   });
 
   registerParallel(ctx, config);
+
+  // Global prompt section: applies to every preset mounted in this profile.
+  // Guarded so a bare test harness (tools only) still works.
+  const prompt = ctx.systemPrompt;
+  if (prompt && typeof prompt.section === 'function') {
+    const register = () =>
+      prompt.section({
+        name: 'dispatch-policy',
+        order: POLICY_ORDER,
+        text: POLICY,
+      });
+    if (typeof ctx.effect === 'function') ctx.effect(register);
+    else register();
+  }
 }
 
 const PARALLEL_DESCRIPTION = [
