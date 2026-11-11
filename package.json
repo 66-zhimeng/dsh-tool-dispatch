@@ -1,6 +1,6 @@
 {
   "name": "dsh-dispatch",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "type": "module",
   "description": "Dispatch many tool calls — independent, ordered with after, or as parallel sub-agents — inside one model round trip.",
   "keywords": [

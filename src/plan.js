@@ -73,24 +73,44 @@ export function normalizeArgs(raw) {
 
     // `after` names steps that must settle first; everything else runs as soon
     // as a slot is free. Only backwards references are legal, which makes
-    // cycles impossible by construction.
+    // cycles impossible by construction. A reference is either a 0-based index
+    // or the `label` of an earlier step (labels read better than indexes when a
+    // chain is long, and they survive reordering of the earlier steps).
     const after = [];
     if (s.after !== undefined) {
       const list = Array.isArray(s.after) ? s.after : [s.after];
       for (const v of list) {
-        if (!Number.isInteger(v) || v < 0) {
-          violations.push(`step[${i}]: after must be non-negative step indexes`);
+        let ref;
+        if (typeof v === 'string') {
+          ref = steps.findIndex((st) => st.label === v);
+          if (ref < 0) {
+            violations.push(`step[${i}]: after references unknown label "${v}" (labels must belong to earlier steps)`);
+            return;
+          }
+        } else if (typeof v === 'number' && Number.isInteger(v) && v >= 0) {
+          ref = v;
+        } else if (typeof v === 'number') {
+          violations.push(`step[${i}]: after must be a non-negative step index (got ${v})`);
+          return;
+        } else {
+          violations.push(`step[${i}]: after must be step indexes or earlier step labels`);
           return;
         }
-        if (v >= i) {
+        if (ref >= i) {
           violations.push(`step[${i}]: after can only reference an earlier step (got ${v})`);
           return;
         }
-        if (!after.includes(v)) after.push(v);
+        if (!after.includes(ref)) after.push(ref);
       }
     }
 
-    steps.push({ tool, args, label: typeof s.label === 'string' ? s.label : undefined, after });
+    const label = typeof s.label === 'string' && s.label.trim() ? s.label.trim() : undefined;
+    if (label && steps.some((st) => st.label === label)) {
+      violations.push(`step[${i}]: label "${label}" is already used by an earlier step`);
+      return;
+    }
+
+    steps.push({ tool, args, label, after });
   });
 
   return { steps, cfg, violations };
