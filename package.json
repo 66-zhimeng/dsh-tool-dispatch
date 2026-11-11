@@ -1,32 +1,45 @@
 {
-    "name":  "dsh-dispatch",
-    "version":  "0.2.0",
-    "private":  true,
-    "type":  "module",
-    "description":  "Dispatch many tool calls — independent, ordered with after, or as parallel sub-agents — inside one model round trip.",
-    "keywords":  [
-                     "dsh",
-                     "dsh-plugin",
-                     "cordis",
-                     "tool",
-                     "dispatch",
-                     "concurrency",
-                     "agent"
-                 ],
-    "main":  "src/index.js",
-    "exports":  {
-                    ".":  "./src/index.js"
-                },
-    "files":  [
-                  "src",
-                  "README.md",
-                  "RELEASE.md"
-              ],
-    "engines":  {
-                    "node":  "\u003e=20.3.0"
-                },
-    "scripts":  {
-                    "test":  "node test/smoke.mjs \u0026\u0026 node test/fast.mjs",
-                    "test:kernel":  "node test/probe.mjs \u0026\u0026 node test/probe-fast.mjs"
-                }
+  "name": "dsh-dispatch",
+  "version": "0.2.0",
+  "type": "module",
+  "description": "Dispatch many tool calls — independent, ordered with after, or as parallel sub-agents — inside one model round trip.",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "cordis",
+    "tool",
+    "dispatch",
+    "concurrency",
+    "agent"
+  ],
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "RELEASE.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20.3.0"
+  },
+  "scripts": {
+    "test": "node test/smoke.mjs && node test/fast.mjs",
+    "test:kernel": "node test/probe.mjs && node test/probe-fast.mjs"
+  },
+  "license": "MIT",
+  "author": "66-zhimeng",
+  "homepage": "https://github.com/66-zhimeng/dsh-dispatch#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/66-zhimeng/dsh-dispatch.git"
+  },
+  "bugs": {
+    "url": "https://github.com/66-zhimeng/dsh-dispatch/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
 }
