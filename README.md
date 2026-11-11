@@ -116,7 +116,7 @@ TTFT 与上下文长度几乎无关（36k 上下文 1,988ms、105k 上下文 2,3
 | 3×`web_fetch` | 逐个 `await` | 2,793 ms | 21.4s |
 | 3×`pwsh` 各 6s（standard 预设，`run_tools`） | 默认并发 | **6,284 ms** | — |
 
-结论：`pwsh` / 浏览器是独占工具，PTC 内核让同批独占调用构成屏障，`Promise.all` 只能拿到「排队」，拿不到重叠；`read` / `grep` / `web_fetch` 这类并发安全工具才是 `Promise.all` 的主场（966 vs 2,793 ms，2.9×）。另外在 PTC 里 `tools.run_tools` 看不到原生工具（返回 `UNKNOWN_TOOL: only run_code is callable directly`），所以「独占工具并发」只有 standard 预设的 `run_tools` 能给——同一负载 6,284 ms vs 20,303 ms，差 3.2×。
+结论：`pwsh` / 浏览器是独占工具，PTC 内核让同批独占调用构成屏障，`Promise.all` 只能拿到「排队」，拿不到重叠；`read` / `grep` / `web_fetch` 这类并发安全工具才是 `Promise.all` 的主场（966 vs 2,793 ms，2.9×）。另外在 PTC 里 `tools.run_tools` 看不到原生工具（返回 `UNKNOWN_TOOL: only run_code is callable directly`），所以要让 PTC 里的独占工具真正并发，必须把它们包进 `await tools.run_tools({steps:[...]})`：v0.2.8 起 `run_tools` 在程序内用 `parent` 令牌直派到执行器的 pipeline，绕开程序内那个「独占工具排队」的调度器。实测同一段 3×`pwsh`（各 6s）：`Promise.all` ≈ 19,600–20,300 ms，`await tools.run_tools(...)` **6,418 ms**（三步分别 6,415 / 6,414 / 6,417 ms，完全重叠），与 standard 的 6,284 ms 基本一致。
 ## 三、什么时候不该用
 
 按形状选工具，别让一种工具做所有事：

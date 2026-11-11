@@ -9,6 +9,43 @@ const clip = (s, n) => (typeof s === 'string' && s.length > n ? `${s.slice(0, n)
 // an error, so `stopOnError` could never see a failed command. Detect it here.
 const EXIT_CODE_RE = /\[exit code:\s*(\d+)\]/;
 
+/**
+ * The executor's invocation pipeline, when this call is itself nested inside one.
+ * Under the PTC executor a nested tool name is only visible with a `parent`
+ * token, and `ctx.tools.execute` has no way to carry one — so a nested batch
+ * has to go through the same pipeline the enclosing program uses.
+ */
+function nestedPipeline(ctx, exec) {
+  if (exec.parent === undefined) return null;
+  try {
+    const executor = typeof ctx.tools.selectExecutor === 'function' ? ctx.tools.selectExecutor(exec.agent) : undefined;
+    const pipeline = executor && executor.pipeline;
+    return pipeline && typeof pipeline.prepare === 'function' && typeof pipeline.dispatch === 'function' && typeof pipeline.complete === 'function'
+      ? pipeline
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Dispatch one nested call through a pipeline, bypassing any per-run scheduler. */
+async function dispatchNested(pipeline, exec, call, signal) {
+  const prepared = await pipeline.prepare({
+    callId: call.id,
+    rootCallId: exec.rootCallId,
+    name: call.name,
+    arguments: JSON.parse(call.arguments),
+    ...(exec.agent === undefined ? {} : { agent: exec.agent }),
+    ...(exec.toolSet === undefined ? {} : { toolSet: exec.toolSet }),
+    parent: exec.token,
+    signal,
+  });
+  if (prepared.kind !== 'dispatch') return prepared.result ?? null;
+  const outcome = await pipeline.dispatch(prepared.exec);
+  const completed = await pipeline.complete(prepared.exec, outcome);
+  return completed ?? null;
+}
+
 const textOf = (content) =>
   (Array.isArray(content) ? content : [])
     .map((b) => (b && b.type === 'text' ? b.text : b && typeof b.type === 'string' ? `<${b.type}>` : ''))
@@ -58,9 +95,15 @@ export async function executeBatch({ steps, cfg, ctx, exec, telemetryPath }) {
       arguments: JSON.stringify(step.args),
     };
     try {
-      const batch = await ctx.tools.execute({ calls: [call], signal, agent: exec.agent, toolSet: exec.toolSet });
-      const settled = batch && Array.isArray(batch.results) ? batch.results[0] : null;
-      const result = settled && settled.result;
+      const pipeline = nestedPipeline(ctx, exec);
+      let result;
+      if (pipeline) {
+        result = await dispatchNested(pipeline, exec, call, signal);
+      } else {
+        const batch = await ctx.tools.execute({ calls: [call], signal, agent: exec.agent, toolSet: exec.toolSet });
+        const settled = batch && Array.isArray(batch.results) ? batch.results[0] : null;
+        result = settled && settled.result;
+      }
       const ok0 = !!result && result.isError === false;
       const text = ok0 ? textOf(result.content) : failureText(result);
       let ok = ok0;

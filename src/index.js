@@ -25,7 +25,7 @@ const POLICY = [
   '发工具调用前扫一眼：这一批动作里有没有两个以上互不依赖的？有就合并成一次调用，没有就直接发。',
   '- 多个独立动作（读多个文件、多条命令、抓多个网页、改完再验）→ 一次 `run_tools`；PTC 模式下在程序里写 `await tools.run_tools({steps:[...]})`。',
   '- 合批省的是往返次数：快工具任务上墙钟只降个位数百分比，慢工具（浏览器、网络、长命令）才是主要收益来源。',
-  '- PTC 程序里 `Promise.all` 只对并发安全的工具（read/grep/web_fetch/subagent）有效；`pwsh`/浏览器是独占工具，同一个程序里也会被串行，要并发跑它们只能用 standard 预设的 `run_tools`。',
+  '- PTC 程序里：直接 `Promise.all` 调 `tools.pwsh` 会被内核串行；要并发跑独占工具，把动作包进 `await tools.run_tools({steps:[...]})`（本插件带 parent 直派，绕开程序内的串行调度），实测 3×6s 从 19.6s 降到 6.4s。',
   '- 两个以上「独占」工具（`pwsh` / `bash` / `run_code` / `dsh_browser_*` / 需要审批的动作）→ 用 `run_tools`：原生一次发多个只会被串行执行，等于白付往返。',
   '- 全是并行安全的工具（`read` / `write` / `edit` / `glob` / `grep` / `web_search` / `web_fetch` / `subagent`）→ 直接在同一条消息里发多个，不必包 `run_tools`。',
   '- 先后顺序能提前写死（线性链、菱形汇合）→ 仍然用 `run_tools`，给后一步写 `after`（下标或前一步的 `label`），不要为此改用 `run_code`。',
