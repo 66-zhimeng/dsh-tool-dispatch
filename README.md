@@ -4,8 +4,10 @@
 
 | 工具 | 解决什么 | 代价 |
 | --- | --- | --- |
-| `run_tools` | 一次模型往返里执行多个工具调用（读 3 个文件、跑 2 条命令、抓 4 个网页） | 这一步的模型输出变长（要写 N 组参数） |
+| `run_tools` | 一次模型往返里执行多个工具调用（读 3 个文件、跑 2 条命令、抓 4 个网页），默认并发，可用 `after` 表达依赖 | 这一步的模型输出变长（要写 N 组参数） |
 | `run_parallel` | 一次往返把 N 个互不依赖的子任务派给 N 个子 agent 真并行 | 子 agent 各自烧 token |
+
+工具名固定为 `run_tools` / `run_parallel`；插件在 profile 级挂载，该 profile 下的每个会话都能用。
 
 ---
 
@@ -42,6 +44,10 @@ TTFT 与上下文长度几乎无关（36k 上下文 1,988ms、105k 上下文 2,3
 ### 3. 为什么必须由插件来做
 
 一次模型输出里能带几个 `tool_call` 由模型决定，执行侧改不了；但**内核原本还会把独占工具逐个串行执行**（`dsh` 的 `batch.js` 对非并发安全工具分组长度为 1）。本插件在工具内部拿到 `ctx.tools.execute`，把 N 个调用重新派发成并发 —— 这是「一次往返里真的让多个动作同时跑」的关键，纯提示词做不到。
+
+### 4. 什么时候会自动停下
+
+`dsh_browser_*`、`ask_user_question`、`todo_write` 会改动共享状态（同一个页面、同一个人、同一份待办），所以它们**恒定独占**：等批内其他调用跑完再上，自己跑完才放行下一个。
 
 ---
 
@@ -89,21 +95,9 @@ TTFT 与上下文长度几乎无关（36k 上下文 1,988ms、105k 上下文 2,3
 
 ---
 
-## 四、踩过的坑与修复
+## 四、安装
 
-| 问题 | 现象 | 修复 |
-| --- | --- | --- |
-| 退出码被当成功 | `throw` / 非零退出的 `pwsh` 返回 `ok`，`stopOnError` 看不到失败 | 解析结果文本里的 `[exit code: N]`，非零判失败；可用 `exitCodeIsError: false` 关掉 |
-| 独占工具被串行 | 两条 `pwsh` 在同一个 `run_tools` 里仍然一前一后（12.5s） | 插件内自行并发派发，实测 3×3s 从 9,030ms → 3,010ms |
-| 并发打乱顺序 | 编译还没结束就去读产物 | 每步可声明 `after`（只能指向更早的步，从结构上排除环） |
-| 浏览器/提问被并发 | 同一页面多条指令互相踩、提问重复弹出 | `dsh_browser_*`、`ask_user_question`、`todo_write` 恒定独占，等批内其他调用跑完再上 |
-| 换代码不热更新 | 只改 `name` 时旧实例卸载、新实例不注册，工具直接消失 | patch 里的 `id` 必须跟着换（`tool-dispatch` → 下一个版本名） |
-| 模块加载失败但无提示 | `package.json` 带 UTF-8 BOM → Loader 解析失败，entry 变 `inactive`，`run_tools` 从工具列表消失 | 用无 BOM 的 UTF-8 写这些文件（PowerShell 5.1 的 `Set-Content -Encoding utf8` 会加 BOM） |
-| 子 agent 的 `maxParallel` 形同虚设 | safe 6 路 `maxParallel: 4`，6 个会话仍在 135ms 内全部创建 | 子 agent 派发即返回，真正上限是任务数 8；已在文档写明，不假装排队 |
-
----
-
-## 五、安装
+从插件市场装（DSH 里添加索引 `https://raw.githubusercontent.com/66-zhimeng/dsh-plugins/main/market/index.json`，搜 `Dispatch`），或手工装：
 
 ```powershell
 Copy-Item "D:\work\aigc-media\modules\dsh-dispatch" "$env:USERPROFILE\.dsh\profiles\web\node_modules\dsh-dispatch" -Recurse
@@ -118,11 +112,11 @@ Copy-Item "D:\work\aigc-media\modules\dsh-dispatch" "$env:USERPROFILE\.dsh\profi
         telemetryPath: C:\Users\<you>\.dsh\dsh-dispatch\telemetry.jsonl
 ```
 
-保存即热挂载，**不需要重启**。工具名固定为 `run_tools` / `run_parallel`。
+保存即热挂载，**不需要重启**。
 
 ---
 
-## 六、用法
+## 五、用法
 
 ```jsonc
 {
@@ -150,9 +144,21 @@ Copy-Item "D:\work\aigc-media\modules\dsh-dispatch" "$env:USERPROFILE\.dsh\profi
 
 ---
 
-## 七、限制
+## 六、限制
 
 - 只减少**往返次数**，不减少工具本身的耗时；单个慢工具（例如 60s 的构建）不会因为合批变快。
 - 并发上限受模型侧影响：一次派太多次，上游可能排队（实测 8 路子 agent 中有一个首字等了 34.8s，是上游延迟不是插件排队）。
 - 加速不是自动的：模型得真的把多个动作塞进一次 `run_tools`。一次只发一个调用时，和没有这个插件完全一样。
 - 只作用于**本 profile** 的会话。
+
+---
+
+## 开发
+
+```powershell
+node test/smoke.mjs        # 19 项：调度、超时、截断、保护区独占
+node test/fast.mjs         # 9 项：退出码、after、maxParallel 封顶
+npm run test:kernel        # 两道真实内核探针（并发派发、after 两波）
+```
+
+装好之后想改代码：改完必须改 patch 里的 `id` 才会重新挂载（只改 `name` 会导致旧实例卸载、新实例不注册）。
