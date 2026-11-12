@@ -1,6 +1,6 @@
 {
   "name": "dsh-dispatch",
-  "version": "0.2.9",
+  "version": "0.2.10",
   "type": "module",
   "description": "Dispatch many tool calls — independent, ordered with after, or as parallel sub-agents — inside one model round trip.",
   "keywords": [
@@ -18,8 +18,10 @@
   },
   "files": [
     "src",
+    "cordis.patch.yml",
     "README.md",
-    "RELEASE.md",
+    "docs",
+    "templates",
     "LICENSE"
   ],
   "engines": {
@@ -41,5 +43,10 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
   }
 }
