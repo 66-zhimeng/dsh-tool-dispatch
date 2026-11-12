@@ -53,3 +53,26 @@ console.log(r.totalMs, r.steps.filter((s) => s.ok).length);
 ## 已知限制
 
 这条路径依赖两个内部接口：`ctx.tools.selectExecutor(agent).pipeline` 与它上面的 `prepare / dispatch / complete`。DSH 升级如果改了这几处，`run_tools` 会自动回退到 `ctx.tools.execute`（standard 预设一直走这条），PTC 下的并发能力则暂时失效——回退不会报错，只是变回串行。
+
+
+## 回退路径（v0.2.9）
+
+v0.2.8 的并发依赖 `ctx.tools.selectExecutor(agent).pipeline`。拿不到它时，`run_tools` 会退回 v0.2.7 的 `ctx.tools.execute()` 入口。为验证这条分支，v0.2.9 加了两个东西：
+
+- 插件配置 `forceFallback: true`——强制跳过 pipeline（只影响开关，不改派发逻辑）；
+- 返回对象与 telemetry 增加 `via` 字段（`nested` = 走 pipeline，`execute` = 走回退），分支判定改成每批决策一次。
+
+三组实测（同一会话、同一负载形态）：
+
+| 场景 | `via` | 子调用 | 成功 / 失败 | `totalMs` | 单步 ms |
+| --- | --- | --- | --- | --- | --- |
+| PTC + `forceFallback` | `execute` | 20 | 0 / 20 | 8 | 2–8 |
+| standard + `forceFallback` | `execute` | 3 | 3 / 0 | 1,263 | 1,258–1,262 |
+| PTC 走 pipeline（对照） | `nested` | 20 | 20 / 0 | 1,448 | 1,105–1,444 |
+
+结论：
+
+- **分支确实切过去了**：`via` 与 telemetry 两处都记录为 `execute`，不是靠推断。
+- **回退在 execute 可用的环境里功能完整**：standard 下 3/3 成功、仍然并发（1.26 s 跑完 3 条 1 s 命令）。
+- **PTC 下回退是「安全失败」**：每步立刻返回 `UNKNOWN_TOOL: unknown tool "pwsh": only \`run_code\` is callable directly`，8 ms 内结束，不挂起、不超时、不丢步骤、不污染会话。这是内核规则（`dsh-tools/lib/types/contracts.d.ts:184-186`），不是插件的缺陷。
+- 因此 `forceFallback` 只用于诊断与演练；PTC 里不要关掉 pipeline。

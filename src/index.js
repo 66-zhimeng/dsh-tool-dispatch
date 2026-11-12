@@ -135,7 +135,7 @@ export function apply(ctx, config = {}) {
           ],
         };
       }
-      return executeBatch({ steps: parsed.steps, cfg: parsed.cfg, ctx, exec, telemetryPath });
+      return executeBatch({ steps: parsed.steps, cfg: parsed.cfg, ctx, exec, telemetryPath, forceFallback: config.forceFallback === true });
     },
   });
 

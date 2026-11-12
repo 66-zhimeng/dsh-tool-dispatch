@@ -75,7 +75,7 @@ function failureText(result) {
  *   telemetryPath?: string | null,
  * }} input
  */
-export async function executeBatch({ steps, cfg, ctx, exec, telemetryPath }) {
+export async function executeBatch({ steps, cfg, ctx, exec, telemetryPath, forceFallback = false }) {
   const started = Date.now();
   const totalSignal = AbortSignal.timeout(cfg.totalTimeoutMs);
   const records = new Array(steps.length).fill(null);
@@ -84,6 +84,13 @@ export async function executeBatch({ steps, cfg, ctx, exec, telemetryPath }) {
   let stopped = false;
 
   const serialOnly = (tool) => ALWAYS_SERIAL.some((re) => re.test(tool));
+
+  // Decided once per batch: either every step goes through the executor
+  // pipeline (needed for native tools under PTC), or all of them use the
+  // public `ctx.tools.execute` entry. `via` is reported so a caller can tell
+  // which branch actually ran.
+  const pipeline = forceFallback ? null : nestedPipeline(ctx, exec);
+  const via = pipeline ? 'nested' : 'execute';
 
   const runOne = async (step, index) => {
     const t0 = Date.now();
@@ -95,7 +102,6 @@ export async function executeBatch({ steps, cfg, ctx, exec, telemetryPath }) {
       arguments: JSON.stringify(step.args),
     };
     try {
-      const pipeline = nestedPipeline(ctx, exec);
       let result;
       if (pipeline) {
         result = await dispatchNested(pipeline, exec, call, signal);
@@ -217,6 +223,7 @@ export async function executeBatch({ steps, cfg, ctx, exec, telemetryPath }) {
   const value = {
     ok: failed === 0,
     totalMs,
+    via,
     steps: list.map((r) => ({
       index: r.index,
       tool: r.tool,
@@ -232,6 +239,7 @@ export async function executeBatch({ steps, cfg, ctx, exec, telemetryPath }) {
     callId: exec.callId,
     ok: value.ok,
     totalMs,
+    via,
     steps: value.steps.map((s) => ({ tool: s.tool, ok: s.ok, skipped: s.skipped, ms: s.ms })),
   });
   return value;
