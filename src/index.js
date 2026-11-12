@@ -67,7 +67,7 @@ const PARAMETERS = {
         type: 'object',
         properties: {
           tool: { type: 'string', description: '工具名，例如 read / grep / pwsh / web_fetch。' },
-          arguments: { description: '该工具的调用参数（JSON 对象，或 JSON 字符串）。' },
+          arguments: { description: '该工具的调用参数：JSON 对象（或 JSON 字符串）。键名必须是 arguments，不是 args。' },
           after: {
             description: '必须先完成的步骤：下标（0 基）或更早步骤的 label，可单个或数组；只能向后指。',
             anyOf: [
@@ -79,7 +79,7 @@ const PARAMETERS = {
           label: { type: 'string', description: '可选，人类可读的动作说明。' },
         },
         required: ['tool'],
-        additionalProperties: true,
+        additionalProperties: false,
       },
     },
     stopOnError: { type: 'boolean', description: '遇错即停（默认 true）。' },

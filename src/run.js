@@ -117,10 +117,10 @@ export async function executeBatch({ steps, cfg, ctx, exec, telemetryPath, force
         const match = EXIT_CODE_RE.exec(text);
         if (match && Number(match[1]) !== 0) ok = false;
       }
-      return { index, tool: step.tool, ok, skipped: false, ms: Date.now() - t0, chars: text.length, text };
+      return { index, label: step.label, tool: step.tool, ok, skipped: false, ms: Date.now() - t0, chars: text.length, text };
     } catch (error) {
       const message = error && error.message ? error.message : String(error);
-      return { index, tool: step.tool, ok: false, skipped: false, ms: Date.now() - t0, chars: 0, text: `ERROR: ${message}` };
+      return { index, label: step.label, tool: step.tool, ok: false, skipped: false, ms: Date.now() - t0, chars: 0, text: `ERROR: ${message}` };
     }
   };
 
@@ -142,12 +142,30 @@ export async function executeBatch({ steps, cfg, ctx, exec, telemetryPath, force
     if (!def) {
       settle(index, {
         index,
+        label: step.label,
         tool: step.tool,
         ok: false,
         skipped: false,
         ms: 0,
         chars: 0,
         text: 'ERROR: UNKNOWN_TOOL — not visible in this step',
+      });
+      return;
+    }
+    // Empty arguments against a tool with required fields can only fail later,
+    // inside that tool; say it here, where the step index is still known.
+    const required = Array.isArray(def.parameters?.required) ? def.parameters.required : [];
+    const provided = step.args && typeof step.args === 'object' ? Object.keys(step.args) : [];
+    if (provided.length === 0 && required.length > 0) {
+      settle(index, {
+        index,
+        label: step.label,
+        tool: step.tool,
+        ok: false,
+        skipped: false,
+        ms: 0,
+        chars: 0,
+        text: `ERROR: arguments is empty — "${step.tool}" requires: ${required.join(', ')}`,
       });
       return;
     }
@@ -169,6 +187,7 @@ export async function executeBatch({ steps, cfg, ctx, exec, telemetryPath, force
           state[i] = 'done';
           records[i] = {
             index: i,
+            label: steps[i].label,
             tool: steps[i].tool,
             ok: false,
             skipped: true,
@@ -203,6 +222,7 @@ export async function executeBatch({ steps, cfg, ctx, exec, telemetryPath, force
         state[i] = 'done';
         records[i] = {
           index: i,
+          label: steps[i].label,
           tool: steps[i].tool,
           ok: false,
           skipped: true,
@@ -226,6 +246,7 @@ export async function executeBatch({ steps, cfg, ctx, exec, telemetryPath, force
     via,
     steps: list.map((r) => ({
       index: r.index,
+      label: r.label,
       tool: r.tool,
       ok: r.ok === true,
       skipped: r.skipped === true,

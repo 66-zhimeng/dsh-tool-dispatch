@@ -2,6 +2,9 @@
 
 export const NESTED_REJECTED = new Set(['run_tools']);
 
+/** The only keys a step may carry; anything else is a typo we must not swallow. */
+const STEP_FIELDS = new Set(['tool', 'arguments', 'after', 'label']);
+
 /** Tools that own shared state (a page, a blocking question, a list): never overlap. */
 export const ALWAYS_SERIAL = [/^dsh_browser_/, /^ask_user_question$/, /^todo_write$/];
 
@@ -48,6 +51,18 @@ export function normalizeArgs(raw) {
 
   const steps = [];
   rawSteps.slice(0, cfg.maxSteps).forEach((s, i) => {
+    // A typo here used to degrade into "every step fails INVALID_ARGS", because
+    // an unknown key was dropped and `arguments` silently became {}.
+    for (const key of Object.keys(s ?? {})) {
+      if (STEP_FIELDS.has(key)) continue;
+      violations.push(
+        key === 'args'
+          ? `step[${i}]: "args" is not a field — put the tool parameters under "arguments"`
+          : `step[${i}]: unknown property "${key}" (allowed: tool, arguments, after, label)`,
+      );
+      return;
+    }
+
     const tool = s && typeof s.tool === 'string' ? s.tool.trim() : '';
     if (!tool) {
       violations.push(`step[${i}]: tool must be a non-empty string`);
