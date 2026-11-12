@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Regression tests for step argument validation (0.2.13).
  *
  * A real session sent `args:` instead of `arguments:`; the unknown key was
@@ -85,4 +85,10 @@ assert.equal(r4.ok, false);
 assert.match(r4.steps[0].summary, /unknown property "timeout"/);
 console.log('PASS rejects unknown step properties');
 
-console.log('args: 4/4 passed');
+// 5) Results stay lossless JSON: no `label: undefined` for steps without a label.
+for (const r of [r1, r2, r3, r4]) {
+  assert.deepEqual(JSON.parse(JSON.stringify(r)), r);
+}
+console.log('PASS results are lossless JSON');
+
+console.log('args: 5/5 passed');

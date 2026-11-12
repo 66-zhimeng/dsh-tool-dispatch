@@ -246,7 +246,8 @@ export async function executeBatch({ steps, cfg, ctx, exec, telemetryPath, force
     via,
     steps: list.map((r) => ({
       index: r.index,
-      label: r.label,
+      // Omit rather than emit `undefined`: the tool result must stay lossless JSON.
+      ...(r.label ? { label: r.label } : {}),
       tool: r.tool,
       ok: r.ok === true,
       skipped: r.skipped === true,
