@@ -30,8 +30,20 @@ export const PARALLEL_DEFAULTS = {
 const NUMERIC = ['maxSteps', 'stepTimeoutMs', 'totalTimeoutMs', 'maxParallel', 'perStepChars', 'maxOutputChars'];
 
 /**
+ * Validate the batch as far as it can be validated without dispatching.
+ *
+ * Two classes of problem, deliberately kept apart:
+ * - `violations` — the request itself is unusable (no steps, too many). Nothing
+ *   can run, so the whole call is rejected.
+ * - `steps[i].error` — one step is malformed. The other steps are still valid,
+ *   so they run: a typo in step 2 must not cancel steps 1 and 3.
+ *
  * @param {unknown} raw model arguments
- * @returns {{steps: {tool: string, args: Record<string, unknown>, label?: string, after: number[]}[], cfg: typeof DEFAULTS, violations: string[]}}
+ * @returns {{
+ *   steps: {index: number, tool: string, args: Record<string, unknown>, label?: string, after: number[], error?: string}[],
+ *   cfg: typeof DEFAULTS,
+ *   violations: string[],
+ * }}
  */
 export function normalizeArgs(raw) {
   const a = raw && typeof raw === 'object' ? raw : {};
@@ -48,41 +60,56 @@ export function normalizeArgs(raw) {
   const rawSteps = Array.isArray(a.steps) ? a.steps : [];
   if (rawSteps.length === 0) violations.push('steps must be a non-empty array');
   if (rawSteps.length > cfg.maxSteps) violations.push(`too many steps: ${rawSteps.length} > maxSteps(${cfg.maxSteps})`);
+  if (violations.length) return { steps: [], cfg, violations };
 
+  /** Every claim about a step is recorded against that step, never against the batch. */
   const steps = [];
-  rawSteps.slice(0, cfg.maxSteps).forEach((s, i) => {
+  const fail = (i, tool, message) => {
+    steps.push({ index: i, tool: tool || '(invalid)', args: {}, label: undefined, after: [], error: message });
+  };
+
+  rawSteps.forEach((s, i) => {
+    if (!s || typeof s !== 'object' || Array.isArray(s)) {
+      fail(i, '', `step[${i}]: must be an object with a "tool" field`);
+      return;
+    }
+
     // A typo here used to degrade into "every step fails INVALID_ARGS", because
     // an unknown key was dropped and `arguments` silently became {}.
-    for (const key of Object.keys(s ?? {})) {
-      if (STEP_FIELDS.has(key)) continue;
-      violations.push(
-        key === 'args'
+    const badKey = Object.keys(s).find((key) => !STEP_FIELDS.has(key));
+    if (badKey) {
+      const tool = typeof s.tool === 'string' ? s.tool.trim() : '';
+      fail(
+        i,
+        tool,
+        badKey === 'args'
           ? `step[${i}]: "args" is not a field — put the tool parameters under "arguments"`
-          : `step[${i}]: unknown property "${key}" (allowed: tool, arguments, after, label)`,
+          : `step[${i}]: unknown property "${badKey}" (allowed: tool, arguments, after, label)`,
       );
       return;
     }
 
-    const tool = s && typeof s.tool === 'string' ? s.tool.trim() : '';
+    const tool = typeof s.tool === 'string' ? s.tool.trim() : '';
     if (!tool) {
-      violations.push(`step[${i}]: tool must be a non-empty string`);
+      fail(i, '', `step[${i}]: tool must be a non-empty string`);
       return;
     }
     if (NESTED_REJECTED.has(tool)) {
-      violations.push(`step[${i}]: ${tool} cannot be nested (depth limit 1)`);
+      fail(i, tool, `step[${i}]: ${tool} cannot be nested (depth limit 1)`);
       return;
     }
+
     let args = s.arguments === undefined ? {} : s.arguments;
     if (typeof args === 'string') {
       try {
         args = JSON.parse(args);
       } catch {
-        violations.push(`step[${i}]: arguments is a string but not valid JSON`);
+        fail(i, tool, `step[${i}]: arguments is a string but not valid JSON`);
         return;
       }
     }
     if (!args || typeof args !== 'object' || Array.isArray(args)) {
-      violations.push(`step[${i}]: arguments must be a JSON object`);
+      fail(i, tool, `step[${i}]: arguments must be a JSON object`);
       return;
     }
 
@@ -99,20 +126,20 @@ export function normalizeArgs(raw) {
         if (typeof v === 'string') {
           ref = steps.findIndex((st) => st.label === v);
           if (ref < 0) {
-            violations.push(`step[${i}]: after references unknown label "${v}" (labels must belong to earlier steps)`);
+            fail(i, tool, `step[${i}]: after references unknown label "${v}" (labels must belong to earlier steps)`);
             return;
           }
         } else if (typeof v === 'number' && Number.isInteger(v) && v >= 0) {
           ref = v;
         } else if (typeof v === 'number') {
-          violations.push(`step[${i}]: after must be a non-negative step index (got ${v})`);
+          fail(i, tool, `step[${i}]: after must be a non-negative step index (got ${v})`);
           return;
         } else {
-          violations.push(`step[${i}]: after must be step indexes or earlier step labels`);
+          fail(i, tool, `step[${i}]: after must be step indexes or earlier step labels`);
           return;
         }
         if (ref >= i) {
-          violations.push(`step[${i}]: after can only reference an earlier step (got ${v})`);
+          fail(i, tool, `step[${i}]: after can only reference an earlier step (got ${v})`);
           return;
         }
         if (!after.includes(ref)) after.push(ref);
@@ -121,11 +148,11 @@ export function normalizeArgs(raw) {
 
     const label = typeof s.label === 'string' && s.label.trim() ? s.label.trim() : undefined;
     if (label && steps.some((st) => st.label === label)) {
-      violations.push(`step[${i}]: label "${label}" is already used by an earlier step`);
+      fail(i, tool, `step[${i}]: label "${label}" is already used by an earlier step`);
       return;
     }
 
-    steps.push({ tool, args, label, after });
+    steps.push({ index: i, tool, args, label, after });
   });
 
   return { steps, cfg, violations };

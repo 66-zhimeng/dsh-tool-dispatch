@@ -1,6 +1,6 @@
 {
   "name": "dsh-tool-dispatch",
-  "version": "0.2.14",
+  "version": "0.2.15",
   "type": "module",
   "description": "Dispatch many tool calls — independent, ordered with after, or as parallel sub-agents — inside one model round trip.",
   "keywords": [
@@ -29,7 +29,7 @@
     "dsh": ">=0.2.1"
   },
   "scripts": {
-    "test": "node test/smoke.mjs && node test/fast.mjs && node test/after.mjs && node test/args.mjs",
+    "test": "node test/smoke.mjs && node test/fast.mjs && node test/after.mjs && node test/args.mjs && node test/partial.mjs",
     "test:kernel": "node test/probe.mjs && node test/probe-fast.mjs"
   },
   "license": "MIT",

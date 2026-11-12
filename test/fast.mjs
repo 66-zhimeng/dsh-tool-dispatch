@@ -134,7 +134,7 @@ await check('rejects a negative after entry', async () => {
     execBase(),
   );
   assert.equal(value.ok, false);
-  assert.match(value.steps[0].summary, /non-negative/);
+  assert.match(value.steps[1].summary, /non-negative/);
 });
 
 await check('maxParallel caps how many run at once', async () => {

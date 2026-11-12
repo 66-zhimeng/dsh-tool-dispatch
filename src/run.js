@@ -83,6 +83,25 @@ export async function executeBatch({ steps, cfg, ctx, exec, telemetryPath, force
   const inFlight = new Map(); // index -> promise
   let stopped = false;
 
+  // A step the validator already rejected is a finished failure, not a reason
+  // to cancel the rest: the whole point of a batch is that one typo costs one
+  // step. It does not trip `stopOnError` either — that flag guards failures
+  // that only appear while running.
+  for (let i = 0; i < steps.length; i += 1) {
+    const step = steps[i];
+    if (!step || !step.error) continue;
+    state[i] = 'done';
+    records[i] = {
+      index: i,
+      tool: step.tool,
+      ok: false,
+      skipped: false,
+      ms: 0,
+      chars: 0,
+      text: `ERROR: ${step.error}`,
+    };
+  }
+
   const serialOnly = (tool) => ALWAYS_SERIAL.some((re) => re.test(tool));
 
   // Decided once per batch: either every step goes through the executor
@@ -131,6 +150,14 @@ export async function executeBatch({ steps, cfg, ctx, exec, telemetryPath, force
     if (!record.ok && cfg.stopOnError) stopped = true;
   };
 
+  // A step killed by static checks never ran, so it must not stop the batch:
+  // `stopOnError` is about failures that appear while executing, not typos.
+  const settleStatic = (index, record) => {
+    records[index] = record;
+    state[index] = 'done';
+    inFlight.delete(index);
+  };
+
   const launch = (index) => {
     const step = steps[index];
     let def;
@@ -140,7 +167,7 @@ export async function executeBatch({ steps, cfg, ctx, exec, telemetryPath, force
       def = undefined;
     }
     if (!def) {
-      settle(index, {
+      settleStatic(index, {
         index,
         label: step.label,
         tool: step.tool,
@@ -157,7 +184,7 @@ export async function executeBatch({ steps, cfg, ctx, exec, telemetryPath, force
     const required = Array.isArray(def.parameters?.required) ? def.parameters.required : [];
     const provided = step.args && typeof step.args === 'object' ? Object.keys(step.args) : [];
     if (provided.length === 0 && required.length > 0) {
-      settle(index, {
+      settleStatic(index, {
         index,
         label: step.label,
         tool: step.tool,
@@ -201,6 +228,25 @@ export async function executeBatch({ steps, cfg, ctx, exec, telemetryPath, force
 
         const deps = steps[i].after || [];
         if (deps.some((d) => state[d] !== 'done')) continue;
+
+        // A step whose prerequisite failed cannot be trusted to produce a
+        // sensible result (it may read whatever the failed step never wrote).
+        const failedDep = deps.find((d) => records[d] && records[d].ok !== true);
+        if (failedDep !== undefined) {
+          state[i] = 'done';
+          records[i] = {
+            index: i,
+            label: steps[i].label,
+            tool: steps[i].tool,
+            ok: false,
+            skipped: true,
+            ms: 0,
+            chars: 0,
+            text: `skipped: step ${failedDep + 1} did not succeed`,
+          };
+          progressed = true;
+          continue;
+        }
 
         // A tool that owns shared state runs alone: wait for the batch to drain.
         const waitingOnSerial = [...inFlight.keys()].some((k) => serialOnly(steps[k].tool));

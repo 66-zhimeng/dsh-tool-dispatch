@@ -41,7 +41,7 @@ ok('mixed index and label array dedupes', () => {
 
 ok('unknown label is rejected', () => {
   const r = normalizeArgs({ steps: [{ tool: 'pwsh', arguments: {} }, { tool: 'pwsh', arguments: {}, after: 'nope' }] });
-  assert.match(r.violations.join(), /unknown label "nope"/);
+  assert.match(r.steps[1].error, /unknown label "nope"/);
 });
 
 ok('forward label is rejected', () => {
@@ -51,7 +51,7 @@ ok('forward label is rejected', () => {
       { tool: 'pwsh', arguments: {}, label: 'later' },
     ],
   });
-  assert.match(r.violations.join(), /unknown label "later"/);
+  assert.match(r.steps[0].error, /unknown label "later"/);
 });
 
 ok('duplicate label is rejected', () => {
@@ -61,12 +61,12 @@ ok('duplicate label is rejected', () => {
       { tool: 'pwsh', arguments: {}, label: 'same' },
     ],
   });
-  assert.match(r.violations.join(), /already used/);
+  assert.match(r.steps[1].error, /already used/);
 });
 
 ok('bad type is rejected', () => {
   const r = normalizeArgs({ steps: [{ tool: 'pwsh', arguments: {} }, { tool: 'pwsh', arguments: {}, after: true }] });
-  assert.match(r.violations.join(), /indexes or earlier step labels/);
+  assert.match(r.steps[1].error, /indexes or earlier step labels/);
 });
 
 console.log(`\n${pass}/7 passed`);

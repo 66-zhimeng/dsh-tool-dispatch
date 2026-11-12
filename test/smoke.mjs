@@ -152,13 +152,14 @@ await check('stopOnError=false continues after a failure', async () => {
       steps: [
         { tool: 'read', arguments: { fail: true } },
         { tool: 'read', arguments: { n: 2 }, after: [0] },
+        { tool: 'read', arguments: { n: 3 } },
       ],
     },
     execBase(),
   );
   assert.equal(value.ok, false);
-  assert.equal(value.steps[1].ok, true);
-  assert.equal(value.steps[1].skipped, false);
+  assert.equal(value.steps[1].skipped, true); // a failed prerequisite is not run
+  assert.equal(value.steps[2].ok, true); // an unrelated step still ran
 });
 
 await check('unknown tool fails as UNKNOWN_TOOL', async () => {
@@ -218,7 +219,8 @@ await check('rejects a forward after reference', async () => {
   );
   assert.equal(value.ok, false);
   assert.match(value.steps[0].summary, /earlier step/);
-  assert.equal(log.length, 0);
+  assert.equal(value.steps[1].ok, true); // only the malformed step is lost
+  assert.equal(log.length, 1);
 });
 
 await check('a protected tool runs alone', async () => {

@@ -210,3 +210,19 @@ npm run test:kernel        # 两道真实内核探针（并发派发、after 两
 ```
 
 装好之后想改代码：改完必须改 patch 里的 `id` 才会重新挂载（只改 `name` 会导致旧实例卸载、新实例不注册）。
+
+## 部分执行：一步写错，不再整批作废
+
+0.2.15 起，静态校验按步生效。以前只要有一个 step 写错（漏 `tool`、把 `arguments` 写成 `args`、`after` 指错），
+整批 `0/N` 直接拒绝，本来正确的步骤一起没跑；现在同一个错误只让那一步失败，其余步骤照常执行，
+返回里仍带原始下标与原因：
+
+```json
+{"index":1,"tool":"(invalid)","ok":false,"skipped":false,
+ "summary":"ERROR: step[1]: tool must be a non-empty string"}
+```
+
+- 依赖它的步骤标 `skipped: step N did not succeed`，不会带着坏前提继续跑。
+- 静态错误不触发 `stopOnError`——那个开关只管运行期失败。
+- 批次级问题仍是整批拒绝：`steps` 为空、超过 `maxSteps`。
+- 输出结构不变（`ok` / `totalMs` / `via` / `steps[]`），旧调用方无需改。
