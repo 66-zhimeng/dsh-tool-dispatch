@@ -1,5 +1,5 @@
 # dsh bundle patch — mounts this plugin into any DSH profile that installs it.
 # `insert` adds the row; `name` resolves through the profile's node_modules.
 - insert:
-    - id: dsh-dispatch
-      name: dsh-dispatch
+    - id: dsh-tool-dispatch
+      name: dsh-tool-dispatch

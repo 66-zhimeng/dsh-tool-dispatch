@@ -1,4 +1,4 @@
-# dsh-dispatch
+# dsh-tool-dispatch
 
 给 DeepSeek Harness 加两个工具，把「很多次模型往返」压成「一次往返」。单步往返的固定成本（本机实测 TTFT 中位 3.0s、整步中位 5.7s）是这里唯一要消灭的东西。
 
@@ -19,7 +19,7 @@
 
 覆盖范围：`standard` / `ptc` / `cordis`（创造模式）都会带上；`ptc` 下额外写明「在程序里写 `await tools.run_tools({steps:[...]})`」。唯一例外是 `minimal` 预设——它的 persona 声明了 `complete: true`，按内核规则会覆盖其它所有段，那段提示不会出现（工具本身仍然可用）。
 
-不想要这段提示：把 patch 里的 `dsh-dispatch` 条目删掉，工具和提示一起消失。
+不想要这段提示：把 patch 里的 `dsh-tool-dispatch` 条目删掉，工具和提示一起消失。
 
 ## 一、它是怎么加速的
 
@@ -141,16 +141,16 @@ TTFT 与上下文长度几乎无关（36k 上下文 1,988ms、105k 上下文 2,3
 从插件市场装（DSH 里添加索引 `https://raw.githubusercontent.com/66-zhimeng/dsh-plugins/main/market/index.json`，搜 `Dispatch`），或手工装：
 
 ```powershell
-Copy-Item "D:\work\aigc-media\modules\dsh-dispatch" "$env:USERPROFILE\.dsh\profiles\web\node_modules\dsh-dispatch" -Recurse
+Copy-Item "D:\work\aigc-media\modules\dsh-tool-dispatch" "$env:USERPROFILE\.dsh\profiles\web\node_modules\dsh-tool-dispatch" -Recurse
 ```
 
 ```yaml
 # ~/.dsh/profiles/<profile>/cordis.patch.yml
 - insert:
     - id: tool-dispatch          # 换代码时必须改这个 id
-      name: dsh-dispatch
+      name: dsh-tool-dispatch
       config:
-        telemetryPath: C:\Users\<you>\.dsh\dsh-dispatch\telemetry.jsonl
+        telemetryPath: C:\Users\<you>\.dsh\dsh-tool-dispatch\telemetry.jsonl
 ```
 
 保存即热挂载，**不需要重启**。

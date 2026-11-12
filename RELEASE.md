@@ -4,9 +4,9 @@
 
 | 通道 | 状态 |
 | --- | --- |
-| GitHub 源码 | ✅ `https://github.com/66-zhimeng/dsh-dispatch`（main） |
+| GitHub 源码 | ✅ `https://github.com/66-zhimeng/dsh-tool-dispatch`（main） |
 | 插件市场索引 | ✅ 已上线：`https://raw.githubusercontent.com/66-zhimeng/dsh-plugins/main/market/index.json`（`source.type = git`，固定 commit） |
-| npm | ⏸ 未发布 —— 名字 `dsh-dispatch` 已被占用（他人 0.4.0），且本机无 npm 登录态 |
+| npm | ⏸ 未发布 —— 名字 `dsh-tool-dispatch` 已被占用（他人 0.4.0），且本机无 npm 登录态 |
 
 **分发就走 Git 源**，市场索引里那条已经能用；npm 只是将来的第二条通道。
 
@@ -15,7 +15,7 @@
 索引在 `66-zhimeng/dsh-plugins` 仓库的 `market/index.json`，格式 1，`source`：
 
 ```json
-{ "type": "git", "url": "https://github.com/66-zhimeng/dsh-dispatch", "commit": "<40 位 SHA>" }
+{ "type": "git", "url": "https://github.com/66-zhimeng/dsh-tool-dispatch", "commit": "<40 位 SHA>" }
 ```
 
 发新版本 = 推代码 → 把 `commit` 换成新 SHA → `parseMarketIndex` 校验 → 提交索引仓库。DSH 侧按 `cacheTtlMs` 缓存索引（本机 profile 已调成 60s）。
@@ -33,15 +33,15 @@
 
 前提（两条都要满足）：
 
-1. **换名字**：`dsh-dispatch` 在 npm 上已存在（0.4.0）。可用且当前未占用的候选：
-   - `@66-zhimeng/dsh-dispatch`（scope 属于账号本身，改名后仓库名不用动）
+1. **换名字**：`dsh-tool-dispatch` 在 npm 上已存在（0.4.0）。可用且当前未占用的候选：
+   - `@66-zhimeng/dsh-tool-dispatch`（scope 属于账号本身，改名后仓库名不用动）
    - `dsh-tool-dispatch`（无 scope）
 2. **登录**：`npm login --auth-type=web`，或在 npmjs.com 建 Automation token 写进 `~/.npmrc` 的 `//registry.npmjs.org/:_authToken=…`（别提交进仓库）。
 
 改完名字后要同步的地方：`package.json` 的 `name`、已装目录名、profile patch 里的 `id` 与 `name`（`id` 必须换，否则热挂载不换实例）。
 
 ```powershell
-cd D:\work\aigc-media\modules\dsh-dispatch
+cd D:\work\aigc-media\modules\dsh-tool-dispatch
 npm test
 npm run test:kernel
 npm publish --access public
@@ -53,20 +53,20 @@ npm publish --access public
 $env:DSH_PKG_BASE = "file:///D:/Tools/PiAgent/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai"
 ```
 
-发成功后，把索引里的 `source` 换成 `{"type":"npm"}`，安装参数自动变成 `dsh-dispatch@0.2.0`。
+发成功后，把索引里的 `source` 换成 `{"type":"npm"}`，安装参数自动变成 `dsh-tool-dispatch@0.2.0`。
 
 ## 3. 手工安装
 
 ```powershell
-Copy-Item "D:\work\aigc-media\modules\dsh-dispatch" "$env:USERPROFILE\.dsh\profiles\web\node_modules\dsh-dispatch" -Recurse
+Copy-Item "D:\work\aigc-media\modules\dsh-tool-dispatch" "$env:USERPROFILE\.dsh\profiles\web\node_modules\dsh-tool-dispatch" -Recurse
 ```
 
 ```yaml
 - insert:
     - id: tool-dispatch          # 换代码时必须改这个 id
-      name: dsh-dispatch
+      name: dsh-tool-dispatch
       config:
-        telemetryPath: C:\Users\<you>\.dsh\dsh-dispatch\telemetry.jsonl
+        telemetryPath: C:\Users\<you>\.dsh\dsh-tool-dispatch\telemetry.jsonl
 ```
 
 ## 4. 排障备忘
